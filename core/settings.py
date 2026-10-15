@@ -38,7 +38,7 @@ def env_list(name: str, default: str = "") -> list[str]:
 # --------------------------------------------------------------------------
 # Базовые настройки
 # --------------------------------------------------------------------------
-SECRET_KEY = env("DJANGO_SECRET_KEY", "dev-insecure-key-change-me")
+SECRET_KEY = env("DJANGO_SECRET_KEY") or "dev-insecure-key-change-me"
 DEBUG = env_bool("DJANGO_DEBUG", True)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 
