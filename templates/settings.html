@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Настройки · AI Атрибуты{% endblock %}
+
+{% block heading %}
+  <h1 class="text-2xl font-extrabold md:text-3xl">Настройки</h1>
+  <p class="mt-1 text-sm text-slate-500">Подключение к LLM и пороги, по которым значения принимаются или уходят на проверку</p>
+{% endblock %}
+
+{% block content %}
+<form method="post" class="space-y-5" novalidate>
+  {% csrf_token %}
+
+  <div class="grid gap-5 lg:grid-cols-2">
+    <section class="card space-y-4" aria-labelledby="h-llm">
+      <h2 id="h-llm" class="font-bold">LLM (Ollama)</h2>
+
+      <div>
+        <label for="{{ form.ollama_base_url.id_for_label }}" class="text-sm font-semibold">{{ form.ollama_base_url.label }}</label>
+        <div class="flex gap-2">
+          {{ form.ollama_base_url }}
+          <button type="button" id="checkBtn" class="mt-1.5 shrink-0 rounded-xl border border-slate-200 px-4 text-sm font-semibold outline-none hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand">Проверить</button>
+        </div>
+        <p id="ollamaStatus" class="mt-1 text-xs text-slate-400" aria-live="polite">{{ form.ollama_base_url.help_text }}</p>
+        {% for e in form.ollama_base_url.errors %}<p class="mt-1 text-xs font-medium text-red-600">{{ e }}</p>{% endfor %}
+      </div>
+
+      {% include "partials/field.html" with field=form.ollama_model %}
+      <datalist id="models-list"></datalist>
+
+      <div class="grid grid-cols-2 gap-4">
+        {% include "partials/field.html" with field=form.ollama_timeout %}
+        {% include "partials/field.html" with field=form.ollama_temperature %}
+      </div>
+    </section>
+
+    <section class="card space-y-4" aria-labelledby="h-proc">
+      <h2 id="h-proc" class="font-bold">Обработка</h2>
+
+      <div class="flex items-start justify-between gap-4 rounded-xl bg-slate-50 p-4">
+        <div>
+          <div class="text-sm font-semibold">{{ form.use_llm.label }}</div>
+          <p class="mt-0.5 text-xs text-slate-500">Если выключить, останутся только регулярные выражения. Так удобно сравнивать Regex и гибрид.</p>
+        </div>
+        <label class="relative inline-flex shrink-0 cursor-pointer items-center">
+          {{ form.use_llm }}
+          <span class="relative inline-block h-6 w-11 rounded-full bg-slate-300 transition-colors peer-checked:bg-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand peer-focus-visible:ring-offset-2
+                       after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-5"></span>
+          <span class="sr-only">{{ form.use_llm.label }}</span>
+        </label>
+      </div>
+
+      {% include "partials/field.html" with field=form.batch_max_rows %}
+    </section>
+  </div>
+
+  <section class="card" aria-labelledby="h-conf">
+    <h2 id="h-conf" class="font-bold">Пороги уверенности</h2>
+    <p class="mt-1 text-sm text-slate-500">От них зависит цвет бейджа уверенности и то, попадёт ли значение в каталог сразу.</p>
+
+    <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:max-w-xl">
+      {% include "partials/field.html" with field=form.confidence_high %}
+      {% include "partials/field.html" with field=form.confidence_low %}
+    </div>
+
+    <div class="mt-6" aria-hidden="true">
+      <div class="flex h-3 overflow-hidden rounded-full bg-slate-100">
+        <div id="zoneRed" class="bg-red-400"></div>
+        <div id="zoneYellow" class="bg-amber-400"></div>
+        <div id="zoneGreen" class="flex-1 bg-emerald-500"></div>
+      </div>
+    </div>
+    <ul class="mt-3 grid gap-1 text-xs text-slate-500 sm:grid-cols-3">
+      <li><span class="mr-1.5 inline-block h-2 w-2 rounded-full bg-red-400"></span><span id="legRed"></span></li>
+      <li><span class="mr-1.5 inline-block h-2 w-2 rounded-full bg-amber-400"></span><span id="legYellow"></span></li>
+      <li><span class="mr-1.5 inline-block h-2 w-2 rounded-full bg-emerald-500"></span><span id="legGreen"></span></li>
+    </ul>
+  </section>
+
+  <div class="flex flex-wrap items-center gap-3">
+    <button type="submit" class="rounded-xl bg-brand px-6 py-3 text-sm font-bold text-white outline-none hover:bg-brand/90 focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2">Сохранить настройки</button>
+    <button type="submit" name="reset" value="1" formnovalidate
+            onclick="return confirm('Сбросить все настройки к значениям по умолчанию?')"
+            class="rounded-xl px-5 py-3 text-sm font-semibold text-slate-500 outline-none hover:bg-white hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-brand">Сбросить по умолчанию</button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    // Проверка подключения к Ollama и список моделей
+    var urlInput = document.getElementById('{{ form.ollama_base_url.id_for_label }}');
+    var status = document.getElementById('ollamaStatus'), list = document.getElementById('models-list');
+    function check() {
+      status.className = 'mt-1 text-xs text-slate-400';
+      status.textContent = 'Проверяем подключение…';
+      fetch("{% url 'ollama_check' %}?url=" + encodeURIComponent(urlInput.value))
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.ok) {
+            list.innerHTML = '';
+            d.models.forEach(function (m) { var o = document.createElement('option'); o.value = m; list.appendChild(o); });
+            status.className = 'mt-1 text-xs font-medium text-emerald-600';
+            status.textContent = 'Подключено. Моделей: ' + d.models.length +
+            (d.cloud && !d.has_key ? '. Не задана переменная OLLAMA_API_KEY' : '');
+          } else {
+            status.className = 'mt-1 text-xs font-medium text-red-600';
+            status.textContent = d.error;
+          }
+        })
+        .catch(function () { status.className = 'mt-1 text-xs font-medium text-red-600'; status.textContent = 'Ошибка запроса'; });
+    }
+    document.getElementById('checkBtn').addEventListener('click', check);
+    check();
+
+    // Живое превью порогов
+    var hi = document.getElementById('{{ form.confidence_high.id_for_label }}');
+    var lo = document.getElementById('{{ form.confidence_low.id_for_label }}');
+    function fmt(x) { return x.toFixed(2); }
+    function preview() {
+      var h = parseFloat(hi.value), l = parseFloat(lo.value);
+      if (isNaN(h) || isNaN(l) || l >= h) {
+        document.getElementById('legRed').textContent = 'Порог неизвестного должен быть меньше порога принятия';
+        document.getElementById('legYellow').textContent = ''; document.getElementById('legGreen').textContent = '';
+        return;
+      }
+      document.getElementById('zoneRed').style.width = (l * 100) + '%';
+      document.getElementById('zoneYellow').style.width = ((h - l) * 100) + '%';
+      document.getElementById('legRed').textContent = 'Меньше ' + fmt(l) + ': неизвестно';
+      document.getElementById('legYellow').textContent = fmt(l) + ' – ' + fmt(h) + ': на проверку';
+      document.getElementById('legGreen').textContent = fmt(h) + ' и выше: принимается';
+    }
+    hi.addEventListener('input', preview); lo.addEventListener('input', preview); preview();
+  })();
+</script>
+{% endblock %}

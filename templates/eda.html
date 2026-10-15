@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% load l10n %}
+{% block title %}EDA · AI Атрибуты{% endblock %}
+
+{% block heading %}
+  <h1 class="text-2xl font-extrabold md:text-3xl">EDA</h1>
+  <p class="mt-1 text-sm text-slate-500">Разведочный анализ данных: поля, пропуски и распределения</p>
+{% endblock %}
+
+{% block content %}
+<section class="card">
+  <form method="post" enctype="multipart/form-data" class="flex flex-wrap items-end gap-3">
+    {% csrf_token %}
+    <div class="min-w-0 flex-1">
+      <label for="dataset" class="text-sm font-semibold">Датасет (CSV или JSON)</label>
+      <input id="dataset" name="dataset" type="file" accept=".csv,.json" required
+             class="mt-1.5 block w-full text-sm text-slate-500 file:mr-3 file:rounded-xl file:border-0 file:bg-brand-soft file:px-4 file:py-2.5 file:text-sm file:font-semibold file:text-brand hover:file:bg-brand/20">
+    </div>
+    <button type="submit" class="rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-white outline-none hover:bg-brand/90 focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2">Загрузить и проанализировать</button>
+  </form>
+  {% if report %}
+  <p class="mt-3 text-xs text-slate-400">Сейчас загружен: <span class="font-semibold text-slate-600">{{ report.filename }}</span>, анализ от {{ report.created }}</p>
+  {% endif %}
+</section>
+
+{% if not report %}
+<section class="card mt-5 py-12 text-center">
+  <p class="font-semibold">Датасета пока нет</p>
+  <p class="mx-auto mt-1 max-w-md text-sm text-slate-500">Загрузите файл с карточками товаров, и здесь появятся размер данных, пропуски по полям, распределения значений и сравнение категорий.</p>
+</section>
+{% else %}
+
+<section class="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4" aria-label="Сводка">
+  <div class="card"><div class="text-sm text-slate-500">Строк</div><div class="mt-2 text-3xl font-extrabold">{{ report.rows }}</div></div>
+  <div class="card"><div class="text-sm text-slate-500">Полей</div><div class="mt-2 text-3xl font-extrabold">{{ report.cols }}</div></div>
+  <div class="card"><div class="text-sm text-slate-500">Дубликатов</div><div class="mt-2 text-3xl font-extrabold">{{ report.duplicates }}</div></div>
+  <div class="card"><div class="text-sm text-slate-500">Заполненность</div><div class="mt-2 text-3xl font-extrabold">{{ report.completeness }}%</div></div>
+</section>
+
+<section class="card mt-5" aria-labelledby="h-cols">
+  <h2 id="h-cols" class="font-bold">Поля и пропуски</h2>
+  <p class="mt-1 text-sm text-slate-500">Раскройте поле, чтобы увидеть распределение значений.</p>
+  <div class="mt-4 divide-y divide-slate-100">
+    {% for c in report.columns %}
+    <details class="group py-1">
+      <summary class="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-1 rounded-lg px-1 py-2.5 outline-none hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-brand [&::-webkit-details-marker]:hidden">
+        <span class="inline-block text-slate-400 transition-transform group-open:rotate-90" aria-hidden="true">▸</span>
+        <span class="min-w-0 flex-1 truncate text-sm font-semibold sm:flex-none sm:basis-56">{{ c.name }}</span>
+        <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{% if c.kind == 'number' %}Число{% elif c.kind == 'text' %}Текст{% else %}Категория{% endif %}</span>
+        <span class="flex flex-1 basis-48 items-center gap-2">
+          <span class="h-2 flex-1 overflow-hidden rounded-full bg-slate-100"><span class="block h-full rounded-full {% if c.missing_pct >= 30 %}bg-red-400{% elif c.missing_pct >= 5 %}bg-amber-400{% else %}bg-emerald-500{% endif %}" style="width: {{ c.missing_w|unlocalize }}%"></span></span>
+          <span class="w-28 text-right text-xs text-slate-500">пропусков {{ c.missing_pct }}%</span>
+        </span>
+        <span class="w-24 text-right text-xs text-slate-400">{{ c.unique }} уник.</span>
+      </summary>
+
+      <div class="px-1 pb-4 pt-2 sm:pl-7">
+        {% if c.kind == 'number' %}
+          {% if c.stats %}
+          <p class="text-sm text-slate-500">Мин. {{ c.stats.min }} · макс. {{ c.stats.max }} · среднее {{ c.stats.mean }} · медиана {{ c.stats.median }}</p>
+          <div class="mt-3 flex h-24 items-end gap-1" role="img" aria-label="Гистограмма значений поля {{ c.name }}">
+            {% for b in c.hist %}<div class="flex-1 rounded-t bg-brand/70" style="height: {{ b.pct|unlocalize }}%" title="{{ b.label }}: {{ b.count }}"></div>{% endfor %}
+          </div>
+          <div class="mt-1 flex justify-between text-[11px] text-slate-400"><span>{{ c.stats.min }}</span><span>{{ c.stats.max }}</span></div>
+          {% else %}<p class="text-sm text-slate-400">Нет числовых значений.</p>{% endif %}
+        {% else %}
+          {% if c.len %}<p class="text-sm text-slate-500">Длина текста: в среднем {{ c.len.mean }}, медиана {{ c.len.median }}, максимум {{ c.len.max }} символов</p>{% endif %}
+          {% if c.top %}
+          <ul class="mt-3 space-y-1.5">
+            {% for t in c.top %}
+            <li class="flex items-center gap-3 text-sm">
+              <span class="w-40 shrink-0 truncate sm:w-56" title="{{ t.value }}">{{ t.value }}</span>
+              <span class="h-2 flex-1 overflow-hidden rounded-full bg-slate-100"><span class="block h-full rounded-full bg-brand/70" style="width: {{ t.pct|unlocalize }}%"></span></span>
+              <span class="w-14 text-right text-xs text-slate-500">{{ t.count }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+          {% elif c.kind == 'text' %}<p class="mt-1 text-xs text-slate-400">Свободный текст: топ значений не показывается.</p>
+          {% else %}<p class="text-sm text-slate-400">Нет значений.</p>{% endif %}
+        {% endif %}
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+</section>
+
+{% if report.category_cols %}
+<section class="card mt-5" aria-labelledby="h-cat">
+  <h2 id="h-cat" class="font-bold">Категории и качество данных</h2>
+  <p class="mt-1 text-sm text-slate-500">Сколько строк в каждой категории и какая доля полей в ней пуста. Так видно, где данные хуже, в том числе в редких категориях.</p>
+  <div class="mt-4 max-w-xs">
+    <label for="catCol" class="text-sm font-semibold">Поле категории</label>
+    <select id="catCol" class="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20">
+      {% for n in report.category_cols %}<option value="{{ n }}" {% if n == report.category_guess %}selected{% endif %}>{{ n }}</option>{% endfor %}
+    </select>
+  </div>
+  <p id="catSummary" class="mt-4 text-sm text-slate-500" aria-live="polite"></p>
+  <div class="mt-3 overflow-x-auto">
+    <table class="w-full min-w-[520px] text-left text-sm">
+      <thead class="text-xs uppercase tracking-wide text-slate-400"><tr><th class="pb-2 pr-3 font-semibold">Категория</th><th class="pb-2 pr-3 font-semibold">Строк</th><th class="pb-2 text-right font-semibold">Средняя доля пропусков</th></tr></thead>
+      <tbody id="catRows"></tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if report and report.category_cols %}
+<script>
+(function () {
+  var URL = "{% url 'eda_by_category' %}";
+  var sel = document.getElementById('catCol'), rows = document.getElementById('catRows'), sum = document.getElementById('catSummary');
+  function h(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function load() {
+    sum.textContent = 'Считаем…';
+    fetch(URL + '?col=' + encodeURIComponent(sel.value))
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        rows.textContent = '';
+        if (!d.ok) { sum.textContent = d.error; return; }
+        var x = d.data, shareRare = x.total ? Math.round(100 * x.rare / x.total) : 0;
+        sum.textContent = 'Категорий: ' + x.total + '. Редких (меньше ' + x.rare_threshold + ' строк): ' + x.rare + ' (' + shareRare + '%).';
+        var tailShown = false;
+        x.rows.forEach(function (r) {
+          if (r.tail && !tailShown) {
+            tailShown = true;
+            var sep = h('tr'), td = h('td', 'pt-4 text-xs font-semibold uppercase tracking-wide text-slate-400', 'Самые редкие категории');
+            td.colSpan = 3; sep.appendChild(td); rows.appendChild(sep);
+          }
+          var tr = h('tr', 'border-t border-slate-100');
+          tr.appendChild(h('td', 'max-w-[14rem] truncate py-2.5 pr-3 font-medium', r.name));
+          var c2 = h('td', 'py-2.5 pr-3'), wrap = h('div', 'flex items-center gap-3');
+          var bar = h('span', 'h-2 w-40 overflow-hidden rounded-full bg-slate-100'), fill = h('span', 'block h-full rounded-full bg-brand/70');
+          fill.style.width = r.pct + '%'; bar.appendChild(fill);
+          wrap.appendChild(bar); wrap.appendChild(h('span', 'text-xs text-slate-500', String(r.rows)));
+          c2.appendChild(wrap); tr.appendChild(c2);
+          var tone = r.missing >= 30 ? 'text-red-600' : (r.missing >= 5 ? 'text-amber-600' : 'text-emerald-600');
+          tr.appendChild(h('td', 'py-2.5 text-right font-semibold ' + tone, r.missing.toFixed(1) + '%'));
+          rows.appendChild(tr);
+        });
+      })
+      .catch(function () { sum.textContent = 'Не удалось получить данные'; });
+  }
+  sel.addEventListener('change', load);
+  load();
+})();
+</script>
+{% endif %}
+{% endblock %}

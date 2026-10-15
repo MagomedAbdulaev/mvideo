@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}AI Атрибуты{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: {
+        fontFamily: { sans: ['Manrope', 'system-ui', 'sans-serif'] },
+        colors: {
+          navy: { 900: '#0B1530', 800: '#111E3F', 700: '#1A2A55' },
+          brand: { DEFAULT: '#4F63E0', soft: '#EEF0FD' },
+          page: '#F4F6FC',
+        },
+      } },
+    };
+  </script>
+  <!-- Восстанавливаем ширину сайдбара до отрисовки, чтобы не было «прыжка» -->
+  <script>
+    try {
+      var w = parseInt(localStorage.getItem('sidebarWidth'), 10);
+      if (w >= 72 && w <= 360) {
+        document.documentElement.style.setProperty('--sw', w + 'px');
+        document.documentElement.dataset.collapsed = w < 150;
+      }
+    } catch (e) {}
+  </script>
+  <style type="text/tailwindcss">
+    @layer components {
+      .card { @apply rounded-2xl bg-white p-5 ring-1 ring-slate-100 shadow-[0_8px_24px_-14px_rgba(16,24,40,.12)]; }
+    }
+  </style>
+  <style>
+    /* Сайдбар: на десктопе ширина берётся из --sw, на мобильном это выезжающая панель */
+    #sidebar { width: 18rem; }
+    @media (min-width: 768px) { #sidebar { width: var(--sw, 256px); } }
+    @media (max-width: 767px) {
+      #sidebar { transform: translateX(-100%); visibility: hidden; transition: transform .25s ease, visibility 0s .25s; }
+      #sidebar.is-open { transform: none; visibility: visible; transition-delay: 0s; }
+    }
+    @media (prefers-reduced-motion: reduce) { #sidebar { transition: none !important; } }
+
+    /* Свёрнутый режим (иконки без подписей) только на десктопе */
+    @media (min-width: 768px) {
+      html[data-collapsed="true"] .nav-label { display: none; }
+      html[data-collapsed="true"] .nav-link,
+      html[data-collapsed="true"] .sb-logo,
+      html[data-collapsed="true"] .sb-user { justify-content: center; padding-left: 0; padding-right: 0; }
+    }
+    body.dragging { user-select: none; cursor: col-resize; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body class="bg-page font-sans text-slate-800 antialiased">
+<div class="flex h-screen flex-col md:flex-row">
+
+  <!-- Верхняя панель на мобильных -->
+  <div class="flex items-center gap-3 bg-navy-900 px-4 py-3 text-white md:hidden">
+    <button id="menuBtn" type="button" aria-label="Открыть меню" aria-controls="sidebar" aria-expanded="false"
+            class="grid h-10 w-10 place-items-center rounded-lg outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-brand">
+      <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <a href="{% url 'index' %}" class="flex items-center gap-2 font-bold">
+      <span class="grid h-8 w-8 place-items-center rounded-lg bg-brand text-sm font-extrabold">AI</span>AI Атрибуты
+    </a>
+  </div>
+
+  <div id="backdrop" class="fixed inset-0 z-30 hidden bg-navy-900/60 md:hidden"></div>
+
+  <!-- Боковая панель: на десктопе ширину можно менять перетаскиванием правого края -->
+  <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 shrink-0 bg-gradient-to-b from-navy-900 to-navy-800 text-slate-300 md:relative md:inset-y-auto md:left-auto">
+    <div class="flex h-full flex-col overflow-hidden">
+      <div class="sb-logo flex items-center justify-between gap-3 px-6 py-6 text-white">
+        <a href="{% url 'index' %}" class="flex items-center gap-3 whitespace-nowrap" title="AI Атрибуты">
+          <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand font-extrabold">AI</span>
+          <span class="nav-label text-lg font-bold">AI Атрибуты</span>
+        </a>
+        <button id="closeBtn" type="button" aria-label="Закрыть меню" class="grid h-9 w-9 place-items-center rounded-lg outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-brand md:hidden">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+
+      <nav class="flex-1 space-y-1 overflow-y-auto px-4" aria-label="Основная навигация">
+        {% for item in nav %}
+        <a href="{% url item.name %}" title="{{ item.label }}"
+           {% if request.resolver_match.url_name == item.name %}aria-current="page"{% endif %}
+           class="nav-link flex items-center gap-3 whitespace-nowrap rounded-xl px-4 py-3 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-brand
+                  {% if request.resolver_match.url_name == item.name %}bg-white/10 text-white{% else %}hover:bg-white/5 hover:text-white{% endif %}">
+          <svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ item.icon }}"/></svg>
+          <span class="nav-label">{{ item.label }}</span>
+        </a>
+        {% endfor %}
+      </nav>
+
+      <div class="sb-user m-4 flex items-center gap-3 rounded-xl bg-white/5 p-3" title="{{ user_name }}">
+        <span class="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand text-sm font-bold text-white">{{ user_initials }}</span>
+        <div class="nav-label min-w-0 whitespace-nowrap text-sm leading-tight">
+          <div class="truncate font-semibold text-white">{{ user_name }}</div>
+          <div class="text-slate-400">{{ user_role }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ручка изменения ширины (только десктоп) -->
+    <div id="resizer" role="separator" aria-orientation="vertical" aria-label="Изменить ширину меню"
+         aria-valuemin="72" aria-valuemax="360" aria-valuenow="256" tabindex="0" title="Потяните, чтобы изменить ширину. Двойной клик сбрасывает."
+         class="group absolute inset-y-0 -right-1.5 z-20 hidden w-3 cursor-col-resize touch-none outline-none md:block">
+      <span class="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-transparent transition-colors group-hover:bg-brand group-focus-visible:bg-brand group-active:bg-brand"></span>
+    </div>
+  </aside>
+
+  <main class="min-w-0 flex-1 overflow-y-auto">
+    <div class="mx-auto max-w-6xl px-4 py-5 sm:px-6 md:px-10 md:py-6">
+      <header class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between md:mb-8">
+        <div>{% block heading %}{% endblock %}</div>
+        <div class="flex items-center gap-4 text-sm text-slate-500 sm:shrink-0">
+          <span id="clock"></span>
+          <button type="button" aria-label="Уведомления" class="grid h-10 w-10 place-items-center rounded-full bg-white ring-1 ring-slate-100 outline-none focus-visible:ring-2 focus-visible:ring-brand">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
+          </button>
+        </div>
+      </header>
+      {% if messages %}
+      <div class="mb-6 space-y-2" role="status">
+        {% for m in messages %}
+        <div class="rounded-xl px-4 py-3 text-sm font-medium {% if 'error' in m.tags %}bg-red-50 text-red-700{% else %}bg-emerald-50 text-emerald-700{% endif %}">{{ m }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</div>
+
+<script>
+  (function () {
+    // Часы
+    var clock = document.getElementById('clock');
+    function tick() {
+      var d = new Date();
+      clock.textContent = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+        + ' · ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    }
+    tick(); setInterval(tick, 30000);
+
+    // Мобильное меню
+    var sb = document.getElementById('sidebar'), backdrop = document.getElementById('backdrop');
+    var menuBtn = document.getElementById('menuBtn'), closeBtn = document.getElementById('closeBtn');
+    function setMenu(open) {
+      sb.classList.toggle('is-open', open);
+      backdrop.classList.toggle('hidden', !open);
+      menuBtn.setAttribute('aria-expanded', open);
+      if (open) closeBtn.focus(); else if (document.activeElement && sb.contains(document.activeElement)) menuBtn.focus();
+    }
+    menuBtn.addEventListener('click', function () { setMenu(true); });
+    closeBtn.addEventListener('click', function () { setMenu(false); });
+    backdrop.addEventListener('click', function () { setMenu(false); });
+    sb.querySelectorAll('nav a').forEach(function (a) { a.addEventListener('click', function () { setMenu(false); }); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') setMenu(false); });
+    window.matchMedia('(min-width: 768px)').addEventListener('change', function (e) { if (e.matches) setMenu(false); });
+
+    // Изменение ширины сайдбара (десктоп)
+    var MIN = 72, MAX = 360, DEF = 256, COLLAPSE_AT = 150;
+    var root = document.documentElement, rs = document.getElementById('resizer');
+    function apply(w, save) {
+      w = Math.min(MAX, Math.max(MIN, Math.round(w)));
+      if (w < COLLAPSE_AT) w = MIN;                       // ниже порога сворачиваем до иконок
+      root.style.setProperty('--sw', w + 'px');
+      root.dataset.collapsed = w < COLLAPSE_AT;
+      rs.setAttribute('aria-valuenow', w);
+      if (save) { try { localStorage.setItem('sidebarWidth', w); } catch (e) {} }
+      return w;
+    }
+    function current() { return sb.getBoundingClientRect().width; }
+    rs.setAttribute('aria-valuenow', Math.round(current()));
+
+    rs.addEventListener('pointerdown', function (e) {
+      rs.setPointerCapture(e.pointerId);
+      document.body.classList.add('dragging');
+    });
+    rs.addEventListener('pointermove', function (e) {
+      if (!rs.hasPointerCapture(e.pointerId)) return;
+      apply(e.clientX - sb.getBoundingClientRect().left, false);
+    });
+    function stop(e) {
+      if (!rs.hasPointerCapture(e.pointerId)) return;
+      rs.releasePointerCapture(e.pointerId);
+      document.body.classList.remove('dragging');
+      apply(current(), true);
+    }
+    rs.addEventListener('pointerup', stop);
+    rs.addEventListener('pointercancel', stop);
+    rs.addEventListener('dblclick', function () { apply(DEF, true); });
+    rs.addEventListener('keydown', function (e) {
+      var cur = current(), step = e.shiftKey ? 48 : 16, next = null;
+      if (e.key === 'ArrowLeft') next = cur - step;
+      else if (e.key === 'ArrowRight') next = cur < COLLAPSE_AT ? COLLAPSE_AT + 10 : cur + step;
+      else if (e.key === 'Home') next = MIN;
+      else if (e.key === 'End') next = MAX;
+      else if (e.key === 'Enter') next = DEF;
+      if (next === null) return;
+      e.preventDefault(); apply(next, true);
+    });
+  })();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

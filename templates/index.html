@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Главная · AI Атрибуты{% endblock %}
+
+{% block heading %}
+  <h1 class="text-2xl font-extrabold md:text-3xl">Добро пожаловать!</h1>
+  <p class="mt-1 text-sm text-slate-500">Вот что происходит с вашим каталогом сегодня</p>
+{% endblock %}
+
+{% block content %}
+<section class="grid grid-cols-2 gap-4 lg:grid-cols-4" aria-label="Ключевые показатели">
+  {% for s in stats %}
+  <div class="card">
+    <div class="text-sm text-slate-500">{{ s.label }}</div>
+    <div class="mt-2 text-3xl font-extrabold tracking-tight">{{ s.value }}</div>
+    <div class="mt-3 flex items-center gap-1.5 text-xs">
+      <span class="inline-flex items-center gap-0.5 font-bold {% if s.good %}text-emerald-600{% else %}text-red-500{% endif %}">
+        <svg class="h-3.5 w-3.5 {% if not s.up %}rotate-180{% endif %}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        {{ s.delta }}
+      </span>
+      {% if s.hint %}<span class="text-slate-400">{{ s.hint }}</span>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</section>
+
+<section class="mt-5 grid gap-5 lg:grid-cols-5">
+  <div class="card lg:col-span-3">
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <h2 class="font-bold">Динамика обработки</h2>
+      <div class="flex items-center gap-4 text-xs text-slate-500">
+        <span class="inline-flex items-center gap-1.5"><i class="h-2 w-2 rounded-full bg-brand"></i>Обработано</span>
+        <span class="inline-flex items-center gap-1.5"><i class="h-2 w-2 rounded-full bg-violet-400"></i>На проверке</span>
+      </div>
+    </div>
+    <div class="h-64"><canvas id="dynamics" role="img" aria-label="График обработки товаров за 7 дней"></canvas></div>
+  </div>
+
+  <div class="card lg:col-span-2">
+    <div class="mb-3 flex items-center justify-between">
+      <h2 class="font-bold">Последние задачи</h2>
+      <a href="{% url 'process' %}" class="text-xs text-slate-400 hover:text-brand">Смотреть все</a>
+    </div>
+    <ul class="divide-y divide-slate-100">
+      {% for t in tasks %}
+      <li class="flex items-center justify-between gap-3 py-3">
+        <div>
+          <div class="text-sm font-semibold">{{ t.name }}</div>
+          <div class="text-xs text-slate-400">{{ t.count }} товаров</div>
+        </div>
+        <span class="rounded-full px-2.5 py-1 text-xs font-semibold
+          {% if t.status == 'done' %}bg-emerald-50 text-emerald-700
+          {% elif t.status == 'running' %}bg-brand-soft text-brand
+          {% else %}bg-amber-50 text-amber-700{% endif %}">{{ t.label }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+
+{{ chart|json_script:"chart-data" }}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  (function () {
+    var d = JSON.parse(document.getElementById('chart-data').textContent);
+    var ctx = document.getElementById('dynamics').getContext('2d');
+    var grad = ctx.createLinearGradient(0, 0, 0, 260);
+    grad.addColorStop(0, 'rgba(79,99,224,.18)'); grad.addColorStop(1, 'rgba(79,99,224,0)');
+    function ds(label, data, color, fill) {
+      return { label: label, data: data, borderColor: color, backgroundColor: fill || 'transparent', fill: !!fill,
+               tension: .4, borderWidth: 2, pointRadius: 3, pointBackgroundColor: color };
+    }
+    new Chart(ctx, {
+      type: 'line',
+      data: { labels: d.labels, datasets: [ds('Обработано', d.processed, '#4F63E0', grad), ds('На проверке', d.review, '#A78BFA')] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { min: 0, max: 15000, ticks: { stepSize: 5000, callback: function (v) { return v ? v / 1000 + 'k' : '0'; } },
+               grid: { color: '#EEF1F8' }, border: { display: false } },
+          x: { grid: { display: false }, border: { display: false } },
+        },
+      },
+    });
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}Результаты · AI Атрибуты{% endblock %}
+
+{% block heading %}
+  <h1 class="text-2xl font-extrabold md:text-3xl">Результаты</h1>
+  <p class="mt-1 text-sm text-slate-500">Проверка извлечённых значений: сомнительные, конфликтующие и пропущенные можно подтвердить или исправить</p>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Статус">
+  {% for t in tabs %}
+  <a href="{{ t.url }}" role="tab" aria-selected="{% if t.key == tab %}true{% else %}false{% endif %}"
+     class="flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-brand {% if t.key == tab %}bg-brand text-white{% else %}bg-white text-slate-600 ring-1 ring-slate-100 hover:bg-slate-50{% endif %}">
+    {{ t.label }}<span data-tab-count="{{ t.key }}" class="text-xs opacity-80">{{ t.count }}</span>
+  </a>
+  {% endfor %}
+</div>
+
+<form method="get" class="card mb-4 flex flex-wrap items-end gap-3">
+  <input type="hidden" name="tab" value="{{ tab }}">
+  <div class="min-w-[12rem] flex-1">
+    <label for="q" class="text-xs font-semibold text-slate-500">Поиск</label>
+    <input id="q" name="q" value="{{ q }}" placeholder="Название товара или значение" class="mt-1 w-full rounded-xl border border-slate-200 px-3.5 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20">
+  </div>
+  <div>
+    <label for="category" class="text-xs font-semibold text-slate-500">Категория</label>
+    <select id="category" name="category" class="mt-1 block rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm outline-none focus:border-brand">
+      <option value="">Все</option>
+      {% for c in categories %}<option value="{{ c }}" {% if c == category %}selected{% endif %}>{{ c }}</option>{% endfor %}
+    </select>
+  </div>
+  <div>
+    <label for="attribute" class="text-xs font-semibold text-slate-500">Атрибут</label>
+    <select id="attribute" name="attribute" class="mt-1 block rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm outline-none focus:border-brand">
+      <option value="">Все</option>
+      {% for a in attributes %}<option value="{{ a }}" {% if a == attribute %}selected{% endif %}>{{ a }}</option>{% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="rounded-xl bg-brand px-5 py-2 text-sm font-bold text-white outline-none hover:bg-brand/90 focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2">Применить</button>
+  {% if q or category or attribute %}<a href="?tab={{ tab }}" class="py-2 text-sm font-semibold text-slate-500 hover:text-slate-800">Сбросить</a>{% endif %}
+</form>
+
+<section class="card">
+  <div class="overflow-x-auto">
+    <table class="w-full min-w-[980px] text-left text-sm">
+      <thead class="text-xs uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="pb-2 pr-3 font-semibold">Товар</th><th class="pb-2 pr-3 font-semibold">Атрибут</th>
+          <th class="pb-2 pr-3 font-semibold">Исходное</th><th class="pb-2 pr-3 font-semibold">Нормализованное</th>
+          <th class="pb-2 pr-3 font-semibold">Уверенность</th><th class="pb-2 pr-3 font-semibold">Способ</th>
+          <th class="pb-2 pr-3 font-semibold">Статус</th><th class="pb-2"><span class="sr-only">Действия</span></th>
+        </tr>
+      </thead>
+      <tbody id="rows">
+        {% for e in page %}
+        <tr class="border-t border-slate-100 align-top" data-id="{{ e.id }}" data-status="{{ e.status }}" data-raw="{{ e.raw_value }}" data-options="{{ e.options }}">
+          <td class="max-w-[16rem] py-3 pr-3">
+            <button type="button" class="toggle block w-full truncate rounded text-left font-semibold outline-none hover:text-brand focus-visible:ring-2 focus-visible:ring-brand" aria-expanded="false" title="Показать текст карточки">{{ e.product.title|default:"Без названия" }}</button>
+            <div class="text-xs text-slate-400">{{ e.product.category|default:"без категории" }}</div>
+          </td>
+          <td class="py-3 pr-3 font-medium">{{ e.attribute }}</td>
+          <td class="py-3 pr-3 text-slate-500">{{ e.raw_value|default:"—" }}</td>
+          <td class="val-cell py-3 pr-3"><span class="val font-semibold">{{ e.value|default:"—" }}</span></td>
+          <td class="py-3 pr-3">{% include "partials/confidence_badge.html" with value=e.confidence %}</td>
+          <td class="method-cell py-3 pr-3">{% include "partials/method_badge.html" with method=e.method %}</td>
+          <td class="status-cell py-3 pr-3">{% include "partials/status_badge.html" with status=e.status %}</td>
+          <td class="actions whitespace-nowrap py-3 text-right">
+            {% if e.value and e.status != 'ok' and e.status != 'fixed' %}<button type="button" class="confirm rounded-lg px-2 py-1 text-xs font-semibold text-emerald-700 outline-none hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-brand">Подтвердить</button>{% endif %}
+            <button type="button" class="edit rounded-lg px-2 py-1 text-xs font-semibold text-brand outline-none hover:bg-brand-soft focus-visible:ring-2 focus-visible:ring-brand">Изменить</button>
+          </td>
+        </tr>
+        <tr class="detail hidden" data-detail-for="{{ e.id }}">
+          <td colspan="8" class="pb-4">
+            <div class="grid gap-3 rounded-xl bg-slate-50 p-4 text-sm lg:grid-cols-3">
+              <div><div class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Заголовок</div><div class="hl whitespace-pre-wrap">{{ e.product.title }}</div></div>
+              <div><div class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Описание</div><div class="hl whitespace-pre-wrap">{{ e.product.description|default:"—" }}</div></div>
+              <div><div class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Атрибуты продавца</div><div class="hl whitespace-pre-wrap">{{ e.product.seller_attrs|default:"—" }}</div></div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p id="empty" class="{% if page.object_list %}hidden {% endif %}py-10 text-center text-sm text-slate-400">
+    {% if tab == 'attention' and not q and not category and not attribute %}Нет значений, требующих внимания.{% else %}Ничего не найдено.{% endif %}
+  </p>
+
+  {% if page.paginator.num_pages > 1 %}
+  <nav class="mt-4 flex items-center justify-between text-sm" aria-label="Страницы">
+    {% if page.has_previous %}<a href="?{% if base_query %}{{ base_query }}&{% endif %}page={{ page.previous_page_number }}" class="rounded-xl px-4 py-2 font-semibold text-brand hover:bg-brand-soft">← Назад</a>{% else %}<span></span>{% endif %}
+    <span class="text-slate-500">Страница {{ page.number }} из {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}<a href="?{% if base_query %}{{ base_query }}&{% endif %}page={{ page.next_page_number }}" class="rounded-xl px-4 py-2 font-semibold text-brand hover:bg-brand-soft">Вперёд →</a>{% else %}<span></span>{% endif %}
+  </nav>
+  {% endif %}
+</section>
+<div id="toast" role="status" aria-live="polite"
+     class="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 translate-y-4 rounded-xl bg-navy-900 px-5 py-3 text-sm font-semibold text-white opacity-0 shadow-lg transition-all duration-200"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var TAB = "{{ tab }}", CSRF = "{{ csrf_token }}";
+  var URL_TPL = "{% url 'result_update' 0 %}";
+  var LEAVES = ['attention', 'review', 'conflict', 'unknown'];      // вкладки, из которых строка уходит после проверки
+  var ATTN = ['unknown', 'review', 'conflict'];
+  var rows = document.getElementById('rows');
+
+  function h(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function adjust(key, d) {
+    var el = document.querySelector('[data-tab-count="' + key + '"]');
+    if (el) el.textContent = Math.max(0, parseInt(el.textContent, 10) + d);
+  }
+
+  var toastTimer;
+    function toast(msg) {
+      var t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.remove('opacity-0', 'translate-y-4');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () { t.classList.add('opacity-0', 'translate-y-4'); }, 2500);
+    }
+
+  // Подсветка найденного значения в тексте карточки
+  function highlight(box, needle) {
+    var text = box.textContent, low = text.toLowerCase(), n = needle.toLowerCase(), i = 0, pos;
+    if (!n || low.indexOf(n) < 0) return;
+    box.textContent = '';
+    while ((pos = low.indexOf(n, i)) > -1) {
+      box.appendChild(document.createTextNode(text.slice(i, pos)));
+      box.appendChild(h('mark', 'rounded bg-amber-200 px-0.5', text.slice(pos, pos + n.length)));
+      i = pos + n.length;
+    }
+    box.appendChild(document.createTextNode(text.slice(i)));
+  }
+
+  function send(tr, payload, done, fail) {
+    fetch(URL_TPL.replace('/0/', '/' + tr.dataset.id + '/'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF }, body: JSON.stringify(payload)
+    }).then(function (r) { return r.json(); }).then(function (d) { d.ok ? done(d) : fail(d.error); })
+      .catch(function () { fail('Ошибка сети'); });
+  }
+
+  function applyResult(tr, d) {
+    var old = tr.dataset.status;
+    adjust(old, -1); adjust(d.status, 1);
+    if (ATTN.indexOf(old) > -1 && ATTN.indexOf(d.status) < 0) adjust('attention', -1);
+    if (LEAVES.indexOf(TAB) > -1) {                                  // строка больше не подходит под вкладку
+      var detail = rows.querySelector('tr[data-detail-for="' + tr.dataset.id + '"]');
+      tr.remove(); if (detail) detail.remove();
+      if (!rows.querySelector('tr[data-id]')) document.getElementById('empty').classList.remove('hidden');
+      return;
+    }
+    tr.dataset.status = d.status;
+    tr.querySelector('.val').textContent = d.value;
+    tr.querySelector('.status-cell').innerHTML = d.status_badge;     // HTML собран сервером из шаблона
+    tr.querySelector('.method-cell').innerHTML = d.method_badge;
+    var c = tr.querySelector('.confirm'); if (c) c.remove();
+  }
+
+  function startEdit(tr) {
+    var cell = tr.querySelector('.val-cell');
+    if (cell.querySelector('input')) return;
+    var options = []; try { options = JSON.parse(tr.dataset.options || '[]'); } catch (e) {}
+    var current = tr.querySelector('.val').textContent; if (current === '—') current = '';
+    var wrap = h('div', 'flex flex-wrap items-center gap-2'), input = h('input', 'w-40 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20');
+    var listId = 'dl-' + tr.dataset.id, dl = h('datalist'); dl.id = listId;
+    options.forEach(function (o) { var op = document.createElement('option'); op.value = o; dl.appendChild(op); });
+    input.value = current; input.setAttribute('list', listId); input.setAttribute('aria-label', 'Новое значение');
+    var ok = h('button', 'rounded-lg bg-brand px-3 py-1.5 text-xs font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-brand', 'Сохранить');
+    var cancel = h('button', 'rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-500 outline-none hover:bg-slate-100', 'Отмена');
+    var err = h('div', 'w-full text-xs font-medium text-red-600'); err.setAttribute('role', 'alert');
+    ok.type = cancel.type = 'button';
+    var keep = cell.firstChild;
+    function close() { wrap.remove(); dl.remove(); keep.classList.remove('hidden'); }
+    function save() {
+      ok.disabled = true;
+      send(tr, { action: 'edit', value: input.value }, function (d) { close(); applyResult(tr, d); toast('Исправлено'); }, function (m) { err.textContent = m; ok.disabled = false; });
+    }
+    ok.onclick = save; cancel.onclick = close;
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); save(); } if (e.key === 'Escape') close(); });
+    keep.classList.add('hidden');
+    wrap.append(input, ok, cancel, err); cell.append(wrap, dl); input.focus(); input.select();
+  }
+
+  rows.addEventListener('click', function (e) {
+    var tr = e.target.closest('tr[data-id]'); if (!tr) return;
+    if (e.target.closest('.edit')) return startEdit(tr);
+    if (e.target.closest('.confirm')) {
+      var b = e.target.closest('.confirm'); b.disabled = true;
+      return send(tr, { action: 'confirm' }, function (d) { applyResult(tr, d); toast('Подтверждено'); }, function (m) { b.disabled = false; alert(m); });
+    }
+    var t = e.target.closest('.toggle');
+    if (t) {
+      var detail = rows.querySelector('tr[data-detail-for="' + tr.dataset.id + '"]'), open = detail.classList.toggle('hidden') === false;
+      t.setAttribute('aria-expanded', open);
+      if (open && !detail.dataset.hl) { detail.dataset.hl = '1'; detail.querySelectorAll('.hl').forEach(function (b) { highlight(b, tr.dataset.raw); }); }
+    }
+  });
+})();
+</script>
+{% endblock %}
